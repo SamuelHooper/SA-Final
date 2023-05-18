@@ -4,6 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+/**
+ * A class that stores a list of 52 standard playing cards.
+ * @author Samuel
+ * @version 1.0
+ */
 public class CardDeck {
     private final List<Card> allCards;
     private List<Card> deck;
@@ -18,12 +23,12 @@ public class CardDeck {
                 allCards.add(new Card(suit, face));
             }
         }
-        deck = new ArrayList<>(allCards);
+        shuffleDeck();
     }
 
     /**
      * Uses Random.nextInt to get a random card from the deck.
-     * @return A single card that is removed from the deck afterwards.
+     * @return A single card that is removed from the deck and then returned.
      */
     public Card dealCard() {
         Random rand = new Random();
@@ -32,6 +37,9 @@ public class CardDeck {
         return dealtCard;
     }
 
+    /**
+     * Creates a new instance of a deck that contains all cards to replace the old deck.
+     */
     public void shuffleDeck() {
         deck = new ArrayList<>(allCards);
     }

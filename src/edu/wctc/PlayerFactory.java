@@ -1,7 +1,9 @@
 package edu.wctc;
 
 /**
- * A Factory class to create players.
+ * A Factory Pattern class to create concrete instances of players.
+ * @author Samuel
+ * @version 1.0
  */
 public class PlayerFactory {
     public static Player getPlayer(PlayerType playerType, String name) {
