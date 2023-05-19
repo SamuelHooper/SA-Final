@@ -18,12 +18,9 @@ public class User extends Player {
     @Override
     public int takeTurn(UI ui, int pot, int minChips, List<Card>communityCards) {
         ui.outputCommunityCards(communityCards);
-        ui.outputCurrentPot(pot);
-        ui.outputMinimumChips(minChips - getBetChips());
-
         ui.outputHand(this);
 
-        int betChips = ui.getTurnInput(getHeldChips(), minChips - getBetChips());
+        int betChips = ui.getTurnInput(getHeldChips(), pot, minChips - getBetChips());
         if (betChips == -1) {
             fold();
             return 0;

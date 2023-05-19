@@ -3,12 +3,13 @@ package edu.wctc;
 import edu.wctc.Cards.Card;
 import edu.wctc.Cards.CardDeck;
 import edu.wctc.HandRanking.CardRanker;
+import edu.wctc.HandRanking.HandRank;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
-import static edu.wctc.HandRanking.HandRank.*;
 import static edu.wctc.PlayerType.*;
 
 /**
@@ -18,13 +19,16 @@ import static edu.wctc.PlayerType.*;
  */
 public class PokerGame {
     private static final int NUM_CARDS_IN_HAND = 2;
+    private static final int NUM_ROUNDS = 3;
+    private static final int NUM_CPU = 5;
+    private static List<String> CPU_NAMES;
 
+    private final UI ui;
     private static PokerGame pokerGame;
     private List<Player> players;
     private List<Card> communityCards;
     private CardDeck deck;
     private int pot;
-    private UI ui;
 
     private PokerGame(UI ui) {
         players = new ArrayList<>();
@@ -41,90 +45,80 @@ public class PokerGame {
     }
 
     /**
-     * Main driver method to handle gameplay and scoring.
+     * Main driver method to display poker menu and run poker game.
      */
     public void playGame() {
-        setUpPokerGame();
-        playRound();
+        int result;
+        do {
+            result = ui.getPokerMenuInput();
+
+            if (result == 1) {
+                setUpPokerGame();
+                do {
+                    playRound();
+                } while (ui.getPokerRoundInput(players) == 1);
+            }
+        } while (result == 1 || result == 2);
+
     }
 
     /**
-     * A method to deal cards and handle betting for a single round. After the round is completed it also ranks hands, empties the pot, clears the players hands, and shuffles the deck.
+     * A method to deal cards and handle betting for a single round. After the round is completed it ranks hands and resets the game for the next round.
      */
-    public void playRound() {
+    private void playRound() {
         dealCards();
 
-        do {
-            for (Player player : players) {
-                if (!player.isFolded()) {
-                    pot += player.takeTurn(ui, pot, getMinChips(), communityCards);
-                }
-            }
-        } while(!onePlayerLeft() && !allPlayersCalled());
+        for (int i = 0; i < NUM_ROUNDS; i++) {
+            dealCard();
+            ui.outputNewRound(i+1);
+            takeBets();
+        }
 
         rankPlayers();
         payoutPot();
 
         for (Player player : players) {
+            if (player.getHeldChips() == 0) {
+                ui.removePlayer(player);
+                players.remove(player);
+            }
             player.clearHand();
         }
+        communityCards = new ArrayList<>();
         deck.shuffleDeck();
     }
 
     /**
      * Creates the players and adds them to the players List.
      */
-    public void setUpPokerGame() {
+    private void setUpPokerGame() {
+        populateCPUNames();
         pot = 0;
         createUser();
-        createUser();
-        createUser();
-        //createCPU();
+        createCPUs();
     }
 
     /**
-     * Uses CardRanker to compare and rank the hands of all players who have not folded. Then sorts players by the highest ranked hand.
+     * Uses CardRanker to compare and rank the hands of all players who have not folded. Then sorts players by the highest ranked hand and output their placement to the ui.
      */
-    public void rankPlayers() {
+    private void rankPlayers() {
         for (Player player : players) {
-            if (!player.isFolded()) {
-                List<Card> finalHand = new ArrayList<>(communityCards);
-                finalHand.addAll(player.getHand());
-
-                ui.revealFinalHand(finalHand, player.getName());
-
-                if (CardRanker.isRoyalFlush(finalHand)) {
-                    player.rankHand(ROYAL_FLUSH);
-                } else if (CardRanker.isStraightFlush(finalHand)) {
-                    player.rankHand(STRAIGHT_FLUSH);
-                } else if (CardRanker.isFourOfAKind(finalHand)) {
-                    player.rankHand(FOUR_OF_A_KIND);
-                } else if (CardRanker.isFullHouse(finalHand)) {
-                    player.rankHand(FULL_HOUSE);
-                } else if (CardRanker.isFlushNotStraight(finalHand)) {
-                    player.rankHand(FLUSH);
-                } else if (CardRanker.isStraightNotFlush(finalHand)) {
-                    player.rankHand(STRAIGHT);
-                } else if (CardRanker.isThreeOfAKindOnly(finalHand)) {
-                    player.rankHand(THREE_OF_A_KIND);
-                } else if (CardRanker.isTwoPair(finalHand)) {
-                    player.rankHand(TWO_PAIR);
-                } else if (CardRanker.isTwoOfAKindOnly(finalHand)) {
-                    player.rankHand(TWO_OF_A_KIND);
-                } else if (CardRanker.isHighCard(finalHand)) {
-                    player.rankHand(HIGH_CARD);
-                }
+            if (player.isFolded()) {
+                player.rankHand(HandRank.UNRANKED);
+            } else {
+                CardRanker.rankHand(player, communityCards);
             }
         }
 
         Collections.sort(players);
+        ui.revealFinalHands(players);
     }
 
     /**
      * Gets a count of many players have hands that are equal to the highest ranked hand.
      * @return The number of players who share a winning hand.
      */
-    public int numberOfTiedHands() {
+    private int numberOfTiedHands() {
         int numOfTies = 0;
         for (int i = 0; i < players.size() - 1; i++) {
             if (players.get(i).getHandRank() != players.get(i+1).getHandRank()) {
@@ -140,7 +134,7 @@ public class PokerGame {
     /**
      * Pays out the chips in the pot to the winning player. Splits the pot evenly across all winners in the event of a tie. Also adds a win to each player that won.
      */
-    public void payoutPot() {
+    private void payoutPot() {
         int ties = numberOfTiedHands();
         int collectedChips = pot / (ties + 1);
         for (int i = 0; i <= ties; i++) {
@@ -152,10 +146,28 @@ public class PokerGame {
     }
 
     /**
+     * Loops through each player and lets them take a turn until either only one player has not folded, or all players have called.
+     */
+    private void takeBets() {
+        do {
+            for (Player player : players) {
+                int betChips = 0;
+                if (!player.isFolded()) {
+                    betChips = player.takeTurn(ui, pot, getMinChips(), communityCards);
+                    pot += betChips;
+                }
+                if (allPlayersCalled() && pot > 0 && betChips > 0) {
+                    break;
+                }
+            }
+        } while(!onePlayerLeft() && !allPlayersCalled());
+    }
+
+    /**
      * Checks to see if all but one player has folded this round.
      * @return True if only one player hasn't folded. False if two or more players have not folded.
      */
-    public boolean onePlayerLeft() {
+    private boolean onePlayerLeft() {
         int foldedPlayers = 0;
         for (Player player : players) {
             if (player.isFolded()) {
@@ -169,7 +181,7 @@ public class PokerGame {
      * Checks to see if every player has bet the same amount of chips.
      * @return True if all players that have not folded have bet an equal number of chips. False if any player has not bet an equal number of chips as the rest of the active players.
      */
-    public boolean allPlayersCalled() {
+    private boolean allPlayersCalled() {
         for (Player player : players) {
             if (player.getBetChips() != getMinChips() && !player.isFolded()) {
                 return false;
@@ -179,28 +191,26 @@ public class PokerGame {
     }
 
     /**
-     * Deals all cards for each round of gameplay.
+     * Deals all cards for the start of each round of gameplay.
      */
-    public void dealCards() {
+    private void dealCards() {
         dealPlayers();
-        dealFlop();
+
+        dealCard();
+        dealCard();
     }
 
     /**
-     * Deals CARDS_IN_FLOP number of cards from the deck to the flop.
+     * Deals one card from the deck to communityCards.
      */
-    public void dealFlop() {
-        final int CARDS_IN_FLOP = 3;
-
-        for (int i = 0; i < CARDS_IN_FLOP; i++) {
-            communityCards.add(deck.dealCard());
-        }
+    private void dealCard() {
+        communityCards.add(deck.dealCard());
     }
 
     /**
      * Deals NUM_CARDS_IN_HAND number of cards from the deck to each player's hand.
      */
-    public void dealPlayers() {
+    private void dealPlayers() {
         for (Player player : players) {
             for (int i = 0; i < NUM_CARDS_IN_HAND; i++) {
                 player.addCardToHand(deck.dealCard());
@@ -211,7 +221,7 @@ public class PokerGame {
     /**
      * Creates an instance of the user, adds it to the players List, and gets their name from the ui.
      */
-    public void createUser() {
+    private void createUser() {
         while(true) {
             try {
                 players.add(PlayerFactory.getPlayer(USER, ui.getPlayerName()));
@@ -223,18 +233,44 @@ public class PokerGame {
     }
 
     /**
-     * Creates the CPUs and adds them to the players List.
+     * Creates the CPUs with random names and adds them to the players List.
      */
-    public void createCPU() {
-        players.add(PlayerFactory.getPlayer(BLUFF_CPU, "CPU 1"));
-        players.add(PlayerFactory.getPlayer(CHEAP_CPU, "CPU 2"));
-        players.add(PlayerFactory.getPlayer(SMART_CPU, "CPU 3"));
+    private void createCPUs() {
+         for (int i = 0; i < NUM_CPU; i++) {
+            players.add(PlayerFactory.getPlayer(getRandomCPU(), getRandomName()));
+        }
+    }
+
+    /**
+     * Uses Random.nextInt to get a random CPU name from CPU_NAMES.
+     * @return A String name that is removed from the list of names and then returned.
+     */
+    private String getRandomName() {
+        Random rand = new Random();
+        String name = CPU_NAMES.get(rand.nextInt(CPU_NAMES.size()));
+        CPU_NAMES.remove(name);
+        return name;
+    }
+
+    /**
+     * Uses Random.nextInt to get a random CPU from PlayerTypes.
+     * @return A PlayerType that is not a User.
+     */
+    private PlayerType getRandomCPU() {
+        List<PlayerType> cpuTypes = new ArrayList<>(List.of(values()));
+        Random rand = new Random();
+        while (true) {
+            PlayerType type = cpuTypes.get(rand.nextInt(cpuTypes.size()));
+            if (type != USER) {
+                return type;
+            }
+        }
     }
 
     /**
      * Gets the minimum amount of chips needed in order to stay in the game.
      */
-    public int getMinChips() {
+    private int getMinChips() {
         int minChips = 0;
         for (Player player : players) {
             if (player.getBetChips() > minChips) {
@@ -242,5 +278,21 @@ public class PokerGame {
             }
         }
         return minChips;
+    }
+
+    /**
+     * Instantiates and adds names to CPU_NAMES.
+     */
+    private void populateCPUNames() {
+        CPU_NAMES = new ArrayList<>();
+        CPU_NAMES.add("cpu Dave");
+        CPU_NAMES.add("cpu Jeff");
+        CPU_NAMES.add("cpu Tina");
+        CPU_NAMES.add("cpu Patrick");
+        CPU_NAMES.add("cpu Marcus");
+        CPU_NAMES.add("cpu Anna");
+        CPU_NAMES.add("cpu Kyle");
+        CPU_NAMES.add("cpu Bridget");
+        CPU_NAMES.add("cpu Larry");
     }
 }

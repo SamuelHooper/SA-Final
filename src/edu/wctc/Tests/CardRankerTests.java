@@ -2,6 +2,8 @@ package edu.wctc.Tests;
 
 import edu.wctc.HandRanking.CardRanker;
 import edu.wctc.Cards.Card;
+import edu.wctc.Player;
+import edu.wctc.User;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -10,6 +12,7 @@ import java.util.List;
 
 import static edu.wctc.Cards.CardFace.*;
 import static edu.wctc.Cards.CardSuit.*;
+import static edu.wctc.HandRanking.HandRank.*;
 import static org.junit.Assert.*;
 
 public class CardRankerTests {
@@ -76,6 +79,34 @@ public class CardRankerTests {
         highCardHand.add(new Card(HEARTS, JACK));
         highCardHand.add(new Card(SPADES, TEN));
         highCardHand.add(new Card(SPADES, FIVE));
+    }
+
+    @Test
+    public void rankHandTests() {
+        List<Card> cards = new ArrayList<>();
+        cards.add(new Card(HEARTS, ACE));
+        cards.add(new Card(SPADES, JACK));
+        cards.add(new Card(CLUBS, EIGHT));
+        cards.add(new Card(DIAMONDS, KING));
+        cards.add(new Card(CLUBS, TWO));
+
+        Player p1 = new User("High Card Tester");
+        p1.addCardToHand(new Card(SPADES, TEN));
+        p1.addCardToHand(new Card(DIAMONDS, THREE));
+        CardRanker.rankHand(p1, cards);
+        assertSame(HIGH_CARD, p1.getHandRank());
+
+        Player p2 = new User("Straight Tester");
+        p2.addCardToHand(new Card(HEARTS, QUEEN));
+        p2.addCardToHand(new Card(DIAMONDS, TEN));
+        CardRanker.rankHand(p2, cards);
+        assertSame(STRAIGHT, p2.getHandRank());
+
+        Player p3 = new User("Three of a Kind Tester");
+        p3.addCardToHand(new Card(SPADES, EIGHT));
+        p3.addCardToHand(new Card(DIAMONDS, EIGHT));
+        CardRanker.rankHand(p3, cards);
+        assertSame(THREE_OF_A_KIND, p3.getHandRank());
     }
 
     @Test

@@ -17,6 +17,7 @@ public abstract class Player implements Comparable<Player> {
     private final static int DEFAULT_CHIPS = 500;
 
     private List<Card> hand;
+    private List<Card> bestHand;
     private HandRank handRank;
     private String name;
     private int heldChips;
@@ -28,8 +29,6 @@ public abstract class Player implements Comparable<Player> {
         setName(name);
         clearHand();
         heldChips = DEFAULT_CHIPS;
-        betChips = 0;
-        folded = false;
     }
 
     /**
@@ -102,11 +101,29 @@ public abstract class Player implements Comparable<Player> {
     }
 
     /**
-     * Sets hand to an empty ArrayList and sets the hand rank to UNRANKED.
+     * @return A list of the 5 cards that made up the best hand the player had this round.
+     */
+    public List<Card> getBestHand() {
+        return bestHand;
+    }
+
+    /**
+     * Sets the players bestHand to bestHand.
+     * @param bestHand The new bestHand for the player.
+     */
+    public void setBestHand(List<Card> bestHand) {
+        this.bestHand = bestHand;
+    }
+
+    /**
+     * Resets the player for the next round by making hand and bestHand new ArrayLists, un-ranking the players hand, unfolding the player, and resting the players betChips;
      */
     public void clearHand() {
+        folded = false;
         hand = new ArrayList<>();
+        bestHand = new ArrayList<>();
         rankHand(HandRank.UNRANKED);
+        betChips = 0;
     }
 
     /**
@@ -152,6 +169,22 @@ public abstract class Player implements Comparable<Player> {
     }
 
     /**
+     * @return A String containing the end of round information about a player.
+     */
+    public String displayRoundInfo() {
+        StringBuilder finalHandOutput = new StringBuilder();
+        finalHandOutput.append("%s's Final Hand: ".formatted(name));
+        if (folded) {
+            finalHandOutput.append("Folded.");
+        } else {
+            for (Card card : bestHand) {
+                finalHandOutput.append("%s | ".formatted(card));
+            }
+        }
+        return finalHandOutput.toString();
+    }
+
+    /**
      * @return The card with the highest value in the players hand.
      */
     public Card getHighestCard() {
@@ -176,6 +209,6 @@ public abstract class Player implements Comparable<Player> {
 
     @Override
     public String toString() {
-        return "%s | Wins: %d".formatted(name, numWins);
+        return "%s, Chips: %d, Wins: %d".formatted(name, heldChips, numWins);
     }
 }
